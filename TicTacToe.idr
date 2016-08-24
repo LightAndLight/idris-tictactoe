@@ -58,11 +58,11 @@ data HasPrevious : Board g p m -> Type where
   MkHasPrevious : HasPrevious (Turn b pos)
 
 status : Board g p m -> Status
-status b {g} {m} = if m == 9
-                      then Finished Draw
-                      else case choice . map winner $ conditions g of
-                                Nothing => InPlay
-                                Just p  => Finished $ Win p
+status b {g} {m} = case choice . map winner $ conditions g of
+                        Nothing => if m == 9
+                                      then Finished Draw
+                                      else InPlay
+                        Just p  => Finished $ Win p
   where
     conditions : Grid -> List (Vect 3 (Maybe Player))
     conditions g = let g' = sequence g in [
@@ -120,7 +120,7 @@ parseInput str = case str of
                       "bc" => Right . Place $ (_ ** _ ** MkPosition 1 2)
                       "br" => Right . Place $ (_ ** _ ** MkPosition 2 2)
                       "back" => Right Back
-                      _    => Left "Invalid position"
+                      _    => Left "Invalid command"
 
 showGrid : Grid -> String
 showGrid (t :: m :: b :: []) = "\n" ++ showRow t ++ "\n\n" ++ showRow m ++ "\n\n" ++ showRow b ++ "\n"
@@ -141,10 +141,17 @@ decHasPrevious (Turn z w) = Yes MkHasPrevious
 
 mutual
   partial
-  loop : {b : Board g p m} -> Game b InPlay -> IO Result
-  loop game {g} = do
+  runGame : {b : Board g p m} -> Game b InPlay -> IO Result
+  runGame game {g} = do
     putStrLn $ showGrid g
     getInput game
+
+  partial
+  gameStep : {b' : Board g' p' m'} -> (s' : Status ** Game b' s') -> IO Result
+  gameStep (InPlay ** game) = runGame game
+  gameStep {g'} (Finished x ** game) = do
+    putStrLn $ showGrid g'
+    return x
 
   partial
   getInput : {b : Board g p m} -> Game b InPlay -> IO Result
@@ -168,13 +175,6 @@ mutual
         putStrLn err
         getInput game
 
-  partial
-  gameStep : {b' : Board g' p' m'} -> (s' : Status ** Game b' s') -> IO Result
-  gameStep (InPlay ** game) = loop game
-  gameStep {g'} (Finished x ** game) = do
-    putStrLn $ showGrid g'
-    return x
-
 showResult : Result -> String
 showResult Draw = "The game was a draw."
 showResult (Win p) = show p ++ " won."
@@ -182,5 +182,5 @@ showResult (Win p) = show p ++ " won."
 partial
 main : IO ()
 main = do
-  res <- loop $ MkGame NewBoard
+  res <- runGame $ MkGame NewBoard
   putStrLn $ showResult res
